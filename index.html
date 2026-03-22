@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>剪貼簿 v2</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f7; color: #222;
+    }
+    .app { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+    h1 { margin: 0 0 16px; font-size: 28px; }
+    .panel, .card {
+      background: #fff; border-radius: 16px; padding: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 14px;
+    }
+    textarea, input, select {
+      width: 100%; padding: 12px; border: 1px solid #d0d0d7;
+      border-radius: 12px; font-size: 16px; background: #fff;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .row > * { flex: 1; min-width: 140px; }
+    button {
+      border: none; border-radius: 12px; padding: 12px 16px;
+      font-size: 15px; cursor: pointer; background: #111; color: #fff;
+    }
+    button.secondary { background: #6b7280; }
+    button.danger { background: #b91c1c; }
+    .meta { font-size: 12px; color: #777; margin: 8px 0; }
+    .text { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+    .tag {
+      display: inline-block; padding: 4px 10px; border-radius: 999px;
+      background: #eef2ff; font-size: 12px; margin-right: 6px; margin-top: 8px;
+    }
+    .pinned { border: 2px solid #f59e0b; }
+    .empty { text-align: center; color: #777; padding: 24px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>剪貼簿 v2</h1>
+
+    <div class="panel">
+      <textarea id="inputText" placeholder="請貼上或輸入文字…"></textarea>
+      <div class="row">
+        <input id="inputTag" placeholder="分類標籤，例如：工作、筆記、常用" />
+        <button id="addBtn">新增</button>
+        <button id="pasteBtn" class="secondary">貼上剪貼簿</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <input id="searchInput" placeholder="搜尋內容…" />
+        <select id="filterTag">
+          <option value="">全部分類</option>
+        </select>
+        <select id="filterPinned">
+          <option value="">全部</option>
+          <option value="pinned">只看收藏</option>
+        </select>
+      </div>
+      <div class="row">
+        <button id="exportBtn" class="secondary">匯出 JSON</button>
+        <input id="importFile" type="file" accept=".json" />
+        <button id="clearAllBtn" class="danger">清空全部</button>
+      </div>
+      <div class="meta" id="infoBar">目前共有 0 筆資料</div>
+    </div>
+
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "clipboard_items_v2";
+    const $ = id => document.getElementById(id);
+
+    let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    let keyword = "", selectedTag = "", pinnedOnly = "";
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      render();
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+                 .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+    }
+
+    function formatDate(ts) {
+      return new Date(ts).toLocaleString("zh-TW");
+    }
+
+    function getTags() {
+      return [...new Set(items.map(i => i.tag).filter(Boolean))].sort();
+    }
+
+    function refreshTagOptions() {
+      const tags = getTags();
+      $("filterTag").innerHTML = `<option value="">全部分類</option>` +
+        tags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join("");
+      $("filterTag").value = selectedTag;
+    }
+
+    function filteredItems() {
+      return items
+        .filter(i => !keyword || i.text.toLowerCase().includes(keyword.toLowerCase()) || (i.tag || "").toLowerCase().includes(keyword.toLowerCase()))
+        .filter(i => !selectedTag || i.tag === selectedTag)
+        .filter(i => pinnedOnly !== "pinned" || i.pinned)
+        .sort((a,b) => (b.pinned - a.pinned) || (b.createdAt - a.createdAt));
+    }
+
+    function render() {
+      refreshTagOptions();
+      const data = filteredItems();
+      $("infoBar").textContent = `目前共有 ${items.length} 筆資料，顯示 ${data.length} 筆`;
+      if (!data.length) {
+        $("list").innerHTML = `<div class="card empty">目前沒有符合條件的內容</div>`;
+        return;
+      }
+      $("list").innerHTML = data.map(item => `
+        <div class="card ${item.pinned ? "pinned" : ""}">
+          <div class="text">${escapeHtml(item.text)}</div>
+          ${item.tag ? `<div class="tag">${escapeHtml(item.tag)}</div>` : ""}
+          <div class="meta">建立時間：${formatDate(item.createdAt)}</div>
+          <div class="row">
+            <button onclick="copyItem('${item.id}')">複製</button>
+            <button class="secondary" onclick="togglePin('${item.id}')">${item.pinned ? "取消收藏" : "加入收藏"}</button>
+            <button class="secondary" onclick="editItem('${item.id}')">編輯</button>
+            <button class="danger" onclick="deleteItem('${item.id}')">刪除</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function addItem() {
+      const text = $("inputText").value.trim();
+      const tag = $("inputTag").value.trim();
+      if (!text) return alert("請先輸入內容");
+      items.unshift({
+        id: crypto.randomUUID(),
+        text, tag,
+        pinned: false,
+        createdAt: Date.now()
+      });
+      $("inputText").value = "";
+      $("inputTag").value = "";
+      save();
+    }
+
+    async function pasteFromClipboard() {
+      try { $("inputText").value = await navigator.clipboard.readText(); }
+      catch { alert("無法直接讀取剪貼簿，可能是權限限制。"); }
+    }
+
+    window.copyItem = async id => {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      try { await navigator.clipboard.writeText(item.text); alert("已複製"); }
+      catch { alert("複製失敗"); }
+    };
+
+    window.togglePin = id => {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      item.pinned = !item.pinned;
+      save();
+    };
+
+    window.editItem = id => {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      const text = prompt("編輯內容：", item.text);
+      if (text === null) return;
+      const tag = prompt("編輯分類標籤：", item.tag || "");
+      item.text = text.trim() || item.text;
+      item.tag = tag === null ? item.tag : tag.trim();
+      save();
+    };
+
+    window.deleteItem = id => {
+      if (!confirm("確定要刪除這筆資料嗎？")) return;
+      items = items.filter(i => i.id !== id);
+      save();
+    };
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "剪貼簿資料.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function importJSON(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data)) throw new Error();
+          items = data;
+          save();
+          alert("匯入成功");
+        } catch {
+          alert("匯入失敗，JSON 格式不正確");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function clearAll() {
+      if (!items.length) return;
+      if (!confirm("確定要清空全部資料嗎？")) return;
+      items = [];
+      save();
+    }
+
+    $("addBtn").addEventListener("click", addItem);
+    $("pasteBtn").addEventListener("click", pasteFromClipboard);
+    $("searchInput").addEventListener("input", e => { keyword = e.target.value; render(); });
+    $("filterTag").addEventListener("change", e => { selectedTag = e.target.value; render(); });
+    $("filterPinned").addEventListener("change", e => { pinnedOnly = e.target.value; render(); });
+    $("exportBtn").addEventListener("click", exportJSON);
+    $("importFile").addEventListener("change", e => { if (e.target.files[0]) importJSON(e.target.files[0]); });
+    $("clearAllBtn").addEventListener("click", clearAll);
+
+    render();
+  </script>
+</body>
+</html>
