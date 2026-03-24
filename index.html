@@ -94,6 +94,12 @@
       color: #777;
       padding: 24px;
     }
+    #editPanel {
+      display: none;
+    }
+    #editText {
+      min-height: 160px;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +112,17 @@
         <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
         <button id="addBtn">新增</button>
         <button id="pasteBtn" class="secondary">貼上剪貼簿</button>
+      </div>
+    </div>
+
+    <div id="editPanel" class="panel">
+      <textarea id="editText" placeholder="編輯內容…"></textarea>
+      <div class="row">
+        <input id="editTags" placeholder="編輯分類標籤，多個標籤可用逗號、頓號或分號分隔" />
+      </div>
+      <div class="row">
+        <button id="saveEditBtn">儲存修改</button>
+        <button id="cancelEditBtn" class="secondary">取消</button>
       </div>
     </div>
 
@@ -204,6 +221,7 @@
     let keyword = "";
     let selectedTag = "";
     let pinnedOnly = "";
+    let editingId = null;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -354,6 +372,49 @@
       }
     }
 
+    function openEditPanel(item) {
+      editingId = item.id;
+      $("editText").value = item.text;
+      $("editTags").value = (item.tags || []).join(", ");
+      $("editPanel").style.display = "block";
+      $("editText").focus();
+    }
+
+    function resetEditPanel() {
+      editingId = null;
+      $("editText").value = "";
+      $("editTags").value = "";
+      $("editPanel").style.display = "none";
+    }
+
+    function saveEdit() {
+      if (!editingId) return;
+
+      const item = items.find(i => i.id === editingId);
+      if (!item) {
+        resetEditPanel();
+        return;
+      }
+
+      const newText = $("editText").value;
+      const tagsInput = $("editTags").value;
+
+      if (!newText.trim()) {
+        alert("內容不可為空");
+        return;
+      }
+
+      item.text = newText;
+      item.tags = parseTags(tagsInput);
+
+      save();
+      resetEditPanel();
+    }
+
+    function cancelEdit() {
+      resetEditPanel();
+    }
+
     window.copyItem = async id => {
       const item = items.find(i => i.id === id);
       if (!item) return;
@@ -376,24 +437,17 @@
     window.editItem = id => {
       const item = items.find(i => i.id === id);
       if (!item) return;
-
-      const text = prompt("編輯內容：", item.text);
-      if (text === null) return;
-
-      const tagsInput = prompt(
-        "編輯分類標籤（多個標籤可用逗號、頓號或分號分隔）：",
-        (item.tags || []).join(", ")
-      );
-      if (tagsInput === null) return;
-
-      item.text = text.trim() || item.text;
-      item.tags = parseTags(tagsInput);
-      save();
+      openEditPanel(item);
     };
 
     window.deleteItem = id => {
       if (!confirm("確定要刪除這筆資料嗎？")) return;
       items = items.filter(i => i.id !== id);
+
+      if (editingId === id) {
+        resetEditPanel();
+      }
+
       save();
     };
 
@@ -413,6 +467,7 @@
           const data = JSON.parse(e.target.result);
           if (!Array.isArray(data)) throw new Error();
           items = normalizeItems(data);
+          resetEditPanel();
           save();
           alert("匯入成功");
         } catch {
@@ -426,6 +481,7 @@
       if (!items.length) return;
       if (!confirm("確定要清空全部資料嗎？")) return;
       items = [];
+      resetEditPanel();
       save();
     }
 
@@ -448,6 +504,8 @@
       if (e.target.files[0]) importJSON(e.target.files[0]);
     });
     $("clearAllBtn").addEventListener("click", clearAll);
+    $("saveEditBtn").addEventListener("click", saveEdit);
+    $("cancelEditBtn").addEventListener("click", cancelEdit);
 
     save();
   </script>
