@@ -7,36 +7,93 @@
   <style>
     * { box-sizing: border-box; }
     body {
-      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f5f7; color: #222;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f7;
+      color: #222;
     }
-    .app { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
-    h1 { margin: 0 0 16px; font-size: 28px; }
+    .app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+    }
     .panel, .card {
-      background: #fff; border-radius: 16px; padding: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 14px;
+      background: #fff;
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      margin-bottom: 14px;
     }
     textarea, input, select {
-      width: 100%; padding: 12px; border: 1px solid #d0d0d7;
-      border-radius: 12px; font-size: 16px; background: #fff;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d0d0d7;
+      border-radius: 12px;
+      font-size: 16px;
+      background: #fff;
     }
-    textarea { min-height: 96px; resize: vertical; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-    .row > * { flex: 1; min-width: 140px; }
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .row > * {
+      flex: 1;
+      min-width: 140px;
+    }
     button {
-      border: none; border-radius: 12px; padding: 12px 16px;
-      font-size: 15px; cursor: pointer; background: #dbe2ea; color: #1f2937;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      background: #dbe2ea;
+      color: #1f2937;
     }
-    button.secondary { background: #e5e7eb; color: #374151; }
-    button.danger { background: #f3e3e3; color: #6b4d4d; }
-    .meta { font-size: 12px; color: #777; margin: 8px 0; }
-    .text { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+    button.secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    button.danger {
+      background: #f3e3e3;
+      color: #6b4d4d;
+    }
+    .meta {
+      font-size: 12px;
+      color: #777;
+      margin: 8px 0;
+    }
+    .text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+    }
     .tag {
-      display: inline-block; padding: 4px 10px; border-radius: 999px;
-      background: #eef2ff; font-size: 12px; margin-right: 6px; margin-top: 8px;
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      font-size: 12px;
+      margin-right: 6px;
+      margin-top: 8px;
     }
-    .pinned { border: 2px solid #f59e0b; }
-    .empty { text-align: center; color: #777; padding: 24px; }
+    .pinned {
+      border: 2px solid #f59e0b;
+    }
+    .empty {
+      text-align: center;
+      color: #777;
+      padding: 24px;
+    }
   </style>
 </head>
 <body>
@@ -46,7 +103,7 @@
     <div class="panel">
       <textarea id="inputText" placeholder="請貼上或輸入文字…"></textarea>
       <div class="row">
-        <input id="inputTags" placeholder="分類標籤，多個標籤請用逗號分隔，例如：工作, 筆記, 常用" />
+        <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
         <button id="addBtn">新增</button>
         <button id="pasteBtn" class="secondary">貼上剪貼簿</button>
       </div>
@@ -76,16 +133,26 @@
 
   <script>
     const STORAGE_KEY = "clipboard_items_v2";
+    const UNTAGGED_VALUE = "__untagged__";
     const $ = id => document.getElementById(id);
+
+    function normalizeTags(tags) {
+      if (!Array.isArray(tags)) return [];
+
+      const flattened = tags.flatMap(tag => {
+        if (tag === null || tag === undefined) return [];
+        return String(tag)
+          .split(/[,\uFF0C\u3001;\uFF1B]+/)
+          .map(part => part.trim())
+          .filter(Boolean);
+      });
+
+      return [...new Set(flattened)];
+    }
 
     function parseTags(input) {
       if (!input) return [];
-      return [...new Set(
-        input
-          .split(",")
-          .map(tag => tag.trim())
-          .filter(Boolean)
-      )];
+      return normalizeTags([input]);
     }
 
     function normalizeItem(item, index = 0) {
@@ -93,12 +160,10 @@
 
       let tags = [];
       if (Array.isArray(item?.tags)) {
-        tags = item.tags.map(tag => String(tag).trim()).filter(Boolean);
+        tags = normalizeTags(item.tags);
       } else if (typeof item?.tag === "string" && item.tag.trim()) {
-        tags = [item.tag.trim()];
+        tags = parseTags(item.tag);
       }
-
-      tags = [...new Set(tags)];
 
       const createdAt =
         typeof item?.createdAt === "number" && Number.isFinite(item.createdAt)
@@ -146,8 +211,12 @@
     }
 
     function escapeHtml(text) {
-      return text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-                 .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+      return String(text)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
     }
 
     function formatDate(ts) {
@@ -155,15 +224,42 @@
     }
 
     function getTags() {
-      return [...new Set(
-        items.flatMap(i => Array.isArray(i.tags) ? i.tags : [])
-      )].sort();
+      const counter = new Map();
+
+      for (const item of items) {
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+        for (const tag of tags) {
+          counter.set(tag, (counter.get(tag) || 0) + 1);
+        }
+      }
+
+      return Array.from(counter.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return a.name.localeCompare(b.name, "zh-Hant");
+        });
+    }
+
+    function getUntaggedCount() {
+      return items.filter(item => !item.tags || item.tags.length === 0).length;
     }
 
     function refreshTagOptions() {
-      const tags = getTags();
-      $("filterTag").innerHTML = `<option value="">全部分類</option>` +
-        tags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join("");
+      const tagList = getTags();
+      const untaggedCount = getUntaggedCount();
+
+      let html = `<option value="">全部分類</option>`;
+
+      if (untaggedCount > 0) {
+        html += `<option value="${UNTAGGED_VALUE}">未分類（${untaggedCount}）</option>`;
+      }
+
+      html += tagList
+        .map(tag => `<option value="${escapeHtml(tag.name)}">${escapeHtml(tag.name)}（${tag.count}）</option>`)
+        .join("");
+
+      $("filterTag").innerHTML = html;
       $("filterTag").value = selectedTag;
     }
 
@@ -176,7 +272,13 @@
           const tagMatch = (i.tags || []).some(tag => tag.toLowerCase().includes(lowerKeyword));
           return textMatch || tagMatch;
         })
-        .filter(i => !selectedTag || (i.tags || []).includes(selectedTag))
+        .filter(i => {
+          if (!selectedTag) return true;
+          if (selectedTag === UNTAGGED_VALUE) {
+            return !i.tags || i.tags.length === 0;
+          }
+          return (i.tags || []).includes(selectedTag);
+        })
         .filter(i => pinnedOnly !== "pinned" || i.pinned)
         .sort((a, b) => {
           if (b.pinned !== a.pinned) return Number(b.pinned) - Number(a.pinned);
@@ -194,10 +296,12 @@
       refreshTagOptions();
       const data = filteredItems();
       $("infoBar").textContent = `目前共有 ${items.length} 筆資料，顯示 ${data.length} 筆`;
+
       if (!data.length) {
         $("list").innerHTML = `<div class="card empty">目前沒有符合條件的內容</div>`;
         return;
       }
+
       $("list").innerHTML = data.map(item => `
         <div class="card ${item.pinned ? "pinned" : ""}">
           <div class="text">${escapeHtml(item.text)}</div>
@@ -223,7 +327,10 @@
       const tagsInput = $("inputTags").value.trim();
       const tags = parseTags(tagsInput);
 
-      if (!text) return alert("請先輸入內容");
+      if (!text) {
+        alert("請先輸入內容");
+        return;
+      }
 
       items.unshift(normalizeItem({
         id: crypto.randomUUID(),
@@ -240,15 +347,23 @@
     }
 
     async function pasteFromClipboard() {
-      try { $("inputText").value = await navigator.clipboard.readText(); }
-      catch { alert("無法直接讀取剪貼簿，可能是權限限制。"); }
+      try {
+        $("inputText").value = await navigator.clipboard.readText();
+      } catch {
+        alert("無法直接讀取剪貼簿，可能是權限限制。");
+      }
     }
 
     window.copyItem = async id => {
       const item = items.find(i => i.id === id);
       if (!item) return;
-      try { await navigator.clipboard.writeText(item.text); alert("已複製"); }
-      catch { alert("複製失敗"); }
+
+      try {
+        await navigator.clipboard.writeText(item.text);
+        alert("已複製");
+      } catch {
+        alert("複製失敗");
+      }
     };
 
     window.togglePin = id => {
@@ -266,7 +381,7 @@
       if (text === null) return;
 
       const tagsInput = prompt(
-        "編輯分類標籤（多個標籤請用逗號分隔）：",
+        "編輯分類標籤（多個標籤可用逗號、頓號或分號分隔）：",
         (item.tags || []).join(", ")
       );
       if (tagsInput === null) return;
@@ -316,11 +431,22 @@
 
     $("addBtn").addEventListener("click", addItem);
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
-    $("searchInput").addEventListener("input", e => { keyword = e.target.value; render(); });
-    $("filterTag").addEventListener("change", e => { selectedTag = e.target.value; render(); });
-    $("filterPinned").addEventListener("change", e => { pinnedOnly = e.target.value; render(); });
+    $("searchInput").addEventListener("input", e => {
+      keyword = e.target.value;
+      render();
+    });
+    $("filterTag").addEventListener("change", e => {
+      selectedTag = e.target.value;
+      render();
+    });
+    $("filterPinned").addEventListener("change", e => {
+      pinnedOnly = e.target.value;
+      render();
+    });
     $("exportBtn").addEventListener("click", exportJSON);
-    $("importFile").addEventListener("change", e => { if (e.target.files[0]) importJSON(e.target.files[0]); });
+    $("importFile").addEventListener("change", e => {
+      if (e.target.files[0]) importJSON(e.target.files[0]);
+    });
     $("clearAllBtn").addEventListener("click", clearAll);
 
     save();
