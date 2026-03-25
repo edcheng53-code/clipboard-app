@@ -94,11 +94,14 @@
       color: #777;
       padding: 24px;
     }
-    #editPanel {
-      display: none;
-    }
-    #editText {
+    .card-edit-text {
       min-height: 160px;
+    }
+    .card-edit-tags {
+      margin-top: 10px;
+    }
+    .card-edit-actions {
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -112,17 +115,6 @@
         <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
         <button id="addBtn">新增</button>
         <button id="pasteBtn" class="secondary">貼上剪貼簿</button>
-      </div>
-    </div>
-
-    <div id="editPanel" class="panel">
-      <textarea id="editText" placeholder="編輯內容…"></textarea>
-      <div class="row">
-        <input id="editTags" placeholder="編輯分類標籤，多個標籤可用逗號、頓號或分號分隔" />
-      </div>
-      <div class="row">
-        <button id="saveEditBtn">儲存修改</button>
-        <button id="cancelEditBtn" class="secondary">取消</button>
       </div>
     </div>
 
@@ -222,6 +214,8 @@
     let selectedTag = "";
     let pinnedOnly = "";
     let editingId = null;
+    let editingText = "";
+    let editingTags = "";
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -310,17 +304,8 @@
       return tags.map(tag => `<div class="tag">${escapeHtml(tag)}</div>`).join("");
     }
 
-    function render() {
-      refreshTagOptions();
-      const data = filteredItems();
-      $("infoBar").textContent = `目前共有 ${items.length} 筆資料，顯示 ${data.length} 筆`;
-
-      if (!data.length) {
-        $("list").innerHTML = `<div class="card empty">目前沒有符合條件的內容</div>`;
-        return;
-      }
-
-      $("list").innerHTML = data.map(item => `
+    function renderViewCard(item) {
+      return `
         <div class="card ${item.pinned ? "pinned" : ""}">
           <div class="text">${escapeHtml(item.text)}</div>
           ${renderTags(item.tags)}
@@ -332,7 +317,53 @@
             <button class="danger" onclick="deleteItem('${item.id}')">刪除</button>
           </div>
         </div>
-      `).join("");
+      `;
+    }
+
+    function renderEditCard(item) {
+      return `
+        <div class="card ${item.pinned ? "pinned" : ""}">
+          <textarea
+            class="card-edit-text"
+            placeholder="編輯內容…"
+            oninput="updateEditingText(this.value)"
+          >${escapeHtml(editingText)}</textarea>
+
+          <div class="card-edit-tags">
+            <input
+              type="text"
+              value="${escapeHtml(editingTags)}"
+              placeholder="編輯分類標籤，多個標籤可用逗號、頓號或分號分隔"
+              oninput="updateEditingTags(this.value)"
+            />
+          </div>
+
+          <div class="meta">建立時間：${formatDate(item.createdAt)}｜排序：${item.order}</div>
+
+          <div class="row card-edit-actions">
+            <button onclick="saveEdit()">儲存修改</button>
+            <button class="secondary" onclick="cancelEdit()">取消</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function render() {
+      refreshTagOptions();
+      const data = filteredItems();
+      $("infoBar").textContent = `目前共有 ${items.length} 筆資料，顯示 ${data.length} 筆`;
+
+      if (!data.length) {
+        $("list").innerHTML = `<div class="card empty">目前沒有符合條件的內容</div>`;
+        return;
+      }
+
+      $("list").innerHTML = data.map(item => {
+        if (item.id === editingId) {
+          return renderEditCard(item);
+        }
+        return renderViewCard(item);
+      }).join("");
     }
 
     function getNextOrder() {
@@ -372,19 +403,17 @@
       }
     }
 
-    function openEditPanel(item) {
+    function startEdit(item) {
       editingId = item.id;
-      $("editText").value = item.text;
-      $("editTags").value = (item.tags || []).join(", ");
-      $("editPanel").style.display = "block";
-      $("editText").focus();
+      editingText = item.text;
+      editingTags = (item.tags || []).join(", ");
+      render();
     }
 
-    function resetEditPanel() {
+    function resetEditState() {
       editingId = null;
-      $("editText").value = "";
-      $("editTags").value = "";
-      $("editPanel").style.display = "none";
+      editingText = "";
+      editingTags = "";
     }
 
     function saveEdit() {
@@ -392,28 +421,35 @@
 
       const item = items.find(i => i.id === editingId);
       if (!item) {
-        resetEditPanel();
+        resetEditState();
+        render();
         return;
       }
 
-      const newText = $("editText").value;
-      const tagsInput = $("editTags").value;
-
-      if (!newText.trim()) {
+      if (!editingText.trim()) {
         alert("內容不可為空");
         return;
       }
 
-      item.text = newText;
-      item.tags = parseTags(tagsInput);
+      item.text = editingText;
+      item.tags = parseTags(editingTags);
 
+      resetEditState();
       save();
-      resetEditPanel();
     }
 
     function cancelEdit() {
-      resetEditPanel();
+      resetEditState();
+      render();
     }
+
+    window.updateEditingText = value => {
+      editingText = value;
+    };
+
+    window.updateEditingTags = value => {
+      editingTags = value;
+    };
 
     window.copyItem = async id => {
       const item = items.find(i => i.id === id);
@@ -437,15 +473,18 @@
     window.editItem = id => {
       const item = items.find(i => i.id === id);
       if (!item) return;
-      openEditPanel(item);
+      startEdit(item);
     };
+
+    window.saveEdit = saveEdit;
+    window.cancelEdit = cancelEdit;
 
     window.deleteItem = id => {
       if (!confirm("確定要刪除這筆資料嗎？")) return;
       items = items.filter(i => i.id !== id);
 
       if (editingId === id) {
-        resetEditPanel();
+        resetEditState();
       }
 
       save();
@@ -467,7 +506,7 @@
           const data = JSON.parse(e.target.result);
           if (!Array.isArray(data)) throw new Error();
           items = normalizeItems(data);
-          resetEditPanel();
+          resetEditState();
           save();
           alert("匯入成功");
         } catch {
@@ -481,7 +520,7 @@
       if (!items.length) return;
       if (!confirm("確定要清空全部資料嗎？")) return;
       items = [];
-      resetEditPanel();
+      resetEditState();
       save();
     }
 
@@ -504,8 +543,6 @@
       if (e.target.files[0]) importJSON(e.target.files[0]);
     });
     $("clearAllBtn").addEventListener("click", clearAll);
-    $("saveEditBtn").addEventListener("click", saveEdit);
-    $("cancelEditBtn").addEventListener("click", cancelEdit);
 
     save();
   </script>
