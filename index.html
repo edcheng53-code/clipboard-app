@@ -99,6 +99,25 @@
     .text-toggle button:hover {
       color: #6b7280;
     }
+    .utility-toggle {
+      margin-top: 6px;
+      text-align: right;
+    }
+    .utility-toggle button {
+      padding: 0;
+      font-size: 12px;
+      background: transparent;
+      color: #8a94a6;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    .utility-toggle button:hover {
+      color: #6b7280;
+    }
+    .utility-actions.hidden {
+      display: none;
+    }
     .tag {
       display: inline-block;
       padding: 4px 10px;
@@ -152,11 +171,17 @@
           <option value="pinned">只看收藏</option>
         </select>
       </div>
-      <div class="row">
+
+      <div class="utility-toggle">
+        <button id="toggleUtilityBtn">更多操作 ▾</button>
+      </div>
+
+      <div id="utilityActions" class="row utility-actions hidden">
         <button id="exportBtn" class="secondary">匯出 JSON</button>
         <input id="importFile" type="file" accept=".json" />
         <button id="clearAllBtn" class="danger">清空全部</button>
       </div>
+
       <div class="meta" id="infoBar">目前共有 0 筆資料</div>
     </div>
 
@@ -240,6 +265,7 @@
     let editingText = "";
     let editingTags = "";
     let expandedIds = new Set();
+    let utilityExpanded = false;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -501,6 +527,15 @@
       render();
     }
 
+    function updateUtilityToggle() {
+      const actions = $("utilityActions");
+      const button = $("toggleUtilityBtn");
+      if (!actions || !button) return;
+
+      actions.classList.toggle("hidden", !utilityExpanded);
+      button.textContent = utilityExpanded ? "收起來 ▴" : "更多操作 ▾";
+    }
+
     window.updateEditingText = value => {
       editingText = value;
       adjustEditTextareaHeight();
@@ -609,12 +644,17 @@
       pinnedOnly = e.target.value;
       render();
     });
+    $("toggleUtilityBtn").addEventListener("click", () => {
+      utilityExpanded = !utilityExpanded;
+      updateUtilityToggle();
+    });
     $("exportBtn").addEventListener("click", exportJSON);
     $("importFile").addEventListener("change", e => {
       if (e.target.files[0]) importJSON(e.target.files[0]);
     });
     $("clearAllBtn").addEventListener("click", clearAll);
 
+    updateUtilityToggle();
     save();
   </script>
 </body>
