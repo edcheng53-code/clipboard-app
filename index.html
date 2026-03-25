@@ -99,9 +99,21 @@
     .text-toggle button:hover {
       color: #6b7280;
     }
+    .panel-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 14px;
+      margin-bottom: 18px;
+    }
+    .panel-header-row .meta {
+      margin: 0;
+    }
     .utility-toggle {
-      margin-top: 6px;
+      margin-top: 0;
       text-align: right;
+      flex-shrink: 0;
     }
     .utility-toggle button {
       padding: 0;
@@ -115,8 +127,15 @@
     .utility-toggle button:hover {
       color: #6b7280;
     }
+    .utility-actions {
+      margin-top: 18px;
+    }
     .utility-actions.hidden {
       display: none;
+    }
+    .utility-actions button,
+    .utility-actions input {
+      margin-top: 4px;
     }
     .tag {
       display: inline-block;
@@ -172,8 +191,12 @@
         </select>
       </div>
 
-      <div class="utility-toggle">
-        <button id="toggleUtilityBtn">更多操作 ▾</button>
+      <div class="panel-header-row">
+        <div class="meta" id="infoBar">目前共有 0 筆資料</div>
+
+        <div class="utility-toggle">
+          <button id="toggleUtilityBtn">更多操作 ▾</button>
+        </div>
       </div>
 
       <div id="utilityActions" class="row utility-actions hidden">
@@ -181,8 +204,6 @@
         <input id="importFile" type="file" accept=".json" />
         <button id="clearAllBtn" class="danger">清空全部</button>
       </div>
-
-      <div class="meta" id="infoBar">目前共有 0 筆資料</div>
     </div>
 
     <div id="list"></div>
