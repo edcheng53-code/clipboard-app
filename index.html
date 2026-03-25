@@ -77,6 +77,19 @@
       word-break: break-word;
       line-height: 1.6;
     }
+    .text.collapsed {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 5;
+      overflow: hidden;
+    }
+    .text-toggle {
+      margin-top: 8px;
+    }
+    .text-toggle button {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
     .tag {
       display: inline-block;
       padding: 4px 10px;
@@ -216,6 +229,7 @@
     let editingId = null;
     let editingText = "";
     let editingTags = "";
+    let expandedIds = new Set();
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -304,10 +318,27 @@
       return tags.map(tag => `<div class="tag">${escapeHtml(tag)}</div>`).join("");
     }
 
+    function shouldShowToggle(text) {
+      const lines = String(text).split(/\r?\n/).length;
+      return lines > 5 || String(text).length > 180;
+    }
+
     function renderViewCard(item) {
+      const isExpanded = expandedIds.has(item.id);
+      const showToggle = shouldShowToggle(item.text);
+
       return `
         <div class="card ${item.pinned ? "pinned" : ""}">
-          <div class="text">${escapeHtml(item.text)}</div>
+          <div class="text ${showToggle && !isExpanded ? "collapsed" : ""}">${escapeHtml(item.text)}</div>
+          ${
+            showToggle
+              ? `<div class="text-toggle">
+                  <button class="secondary" onclick="toggleExpand('${item.id}')">
+                    ${isExpanded ? "收起來" : "詳細內容"}
+                  </button>
+                </div>`
+              : ""
+          }
           ${renderTags(item.tags)}
           <div class="meta">建立時間：${formatDate(item.createdAt)}｜排序：${item.order}</div>
           <div class="row">
@@ -451,6 +482,15 @@
       editingTags = value;
     };
 
+    window.toggleExpand = id => {
+      if (expandedIds.has(id)) {
+        expandedIds.delete(id);
+      } else {
+        expandedIds.add(id);
+      }
+      render();
+    };
+
     window.copyItem = async id => {
       const item = items.find(i => i.id === id);
       if (!item) return;
@@ -482,6 +522,7 @@
     window.deleteItem = id => {
       if (!confirm("確定要刪除這筆資料嗎？")) return;
       items = items.filter(i => i.id !== id);
+      expandedIds.delete(id);
 
       if (editingId === id) {
         resetEditState();
@@ -506,6 +547,7 @@
           const data = JSON.parse(e.target.result);
           if (!Array.isArray(data)) throw new Error();
           items = normalizeItems(data);
+          expandedIds = new Set();
           resetEditState();
           save();
           alert("匯入成功");
@@ -520,6 +562,7 @@
       if (!items.length) return;
       if (!confirm("確定要清空全部資料嗎？")) return;
       items = [];
+      expandedIds = new Set();
       resetEditState();
       save();
     }
