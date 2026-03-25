@@ -100,6 +100,7 @@
     .text-toggle button:hover {
       color: #6b7280;
     }
+
     .panel-header-row {
       display: flex;
       justify-content: space-between;
@@ -111,6 +112,7 @@
     .panel-header-row .meta {
       margin: 0;
     }
+
     .utility-toggle {
       margin-top: 0;
       text-align: right;
@@ -138,6 +140,7 @@
     .utility-actions input {
       margin-top: 4px;
     }
+
     .tag {
       display: inline-block;
       padding: 4px 10px;
@@ -155,6 +158,7 @@
       color: #777;
       padding: 24px;
     }
+
     .card-edit-text {
       min-height: 160px;
       overflow-y: auto;
@@ -170,18 +174,24 @@
       position: relative;
       flex: 1;
       min-width: 140px;
+      z-index: 20;
     }
     .tag-input-wrap input {
       width: 100%;
     }
     .tag-suggestions {
-      margin-top: 8px;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
       border: 1px solid #d0d0d7;
       border-radius: 12px;
       background: #fff;
       padding: 8px;
       max-height: 200px;
       overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
     }
     .tag-suggestions.hidden {
       display: none;
@@ -207,6 +217,40 @@
       font-size: 13px;
       color: #9ca3af;
     }
+
+    .search-input-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 140px;
+    }
+    .search-input-wrap input {
+      width: 100%;
+      padding-right: 42px;
+    }
+    .clear-search-btn {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
+      color: #9ca3af;
+      font-size: 18px;
+      line-height: 24px;
+      text-align: center;
+      box-shadow: none;
+    }
+    .clear-search-btn:hover {
+      color: #6b7280;
+      background: #f3f4f6;
+    }
+    .clear-search-btn.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -227,7 +271,10 @@
 
     <div class="panel">
       <div class="row">
-        <input id="searchInput" placeholder="搜尋內容…" />
+        <div class="search-input-wrap">
+          <input id="searchInput" placeholder="搜尋內容…" />
+          <button id="clearSearchBtn" type="button" class="clear-search-btn hidden" aria-label="清除搜尋">×</button>
+        </div>
         <select id="filterTag">
           <option value="">全部分類</option>
         </select>
@@ -333,8 +380,12 @@
     let editingTags = "";
     let expandedIds = new Set();
     let utilityExpanded = false;
+
     let tagSuggestionsVisible = false;
     let hideTagSuggestionsTimer = null;
+
+    let editTagSuggestionsVisible = false;
+    let hideEditTagSuggestionsTimer = null;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -466,12 +517,18 @@
           >${escapeHtml(editingText)}</textarea>
 
           <div class="card-edit-tags">
-            <input
-              type="text"
-              value="${escapeHtml(editingTags)}"
-              placeholder="編輯分類標籤，多個標籤可用逗號、頓號或分號分隔"
-              oninput="updateEditingTags(this.value)"
-            />
+            <div class="tag-input-wrap">
+              <input
+                id="editTagsInput"
+                type="text"
+                value="${escapeHtml(editingTags)}"
+                placeholder="編輯分類標籤，多個標籤可用逗號、頓號或分號分隔"
+                oninput="updateEditingTags(this.value)"
+                onfocus="showEditTagSuggestions()"
+                onblur="scheduleHideEditTagSuggestions()"
+              />
+              <div id="editTagSuggestions" class="tag-suggestions hidden"></div>
+            </div>
           </div>
 
           <div class="meta">建立時間：${formatDate(item.createdAt)}｜排序：${item.order}</div>
@@ -486,6 +543,8 @@
 
     function render() {
       refreshTagOptions();
+      updateClearSearchButton();
+
       if (tagSuggestionsVisible) {
         renderTagSuggestions();
       }
@@ -506,7 +565,12 @@
       }).join("");
 
       if (editingId) {
-        requestAnimationFrame(adjustEditTextareaHeight);
+        requestAnimationFrame(() => {
+          adjustEditTextareaHeight();
+          if (editTagSuggestionsVisible) {
+            renderEditTagSuggestions();
+          }
+        });
       }
     }
 
@@ -563,7 +627,8 @@
     function startEdit(item) {
       editingId = item.id;
       editingText = item.text;
-      editingTags = (item.tags || []).join(", ");
+      editingTags = (item.tags || []).join("，");
+      editTagSuggestionsVisible = false;
       render();
       requestAnimationFrame(adjustEditTextareaHeight);
     }
@@ -572,6 +637,11 @@
       editingId = null;
       editingText = "";
       editingTags = "";
+      editTagSuggestionsVisible = false;
+      if (hideEditTagSuggestionsTimer) {
+        clearTimeout(hideEditTagSuggestionsTimer);
+        hideEditTagSuggestionsTimer = null;
+      }
     }
 
     function saveEdit() {
@@ -664,6 +734,77 @@
       showTagSuggestions();
     }
 
+    function renderEditTagSuggestions() {
+      const container = $("editTagSuggestions");
+      if (!container) return;
+
+      const tags = getTags();
+      if (!tags.length) {
+        container.innerHTML = `<div class="tag-suggestion-empty">目前還沒有可選標籤</div>`;
+        container.classList.remove("hidden");
+        return;
+      }
+
+      container.innerHTML = tags.map(tag => `
+        <button
+          type="button"
+          class="tag-suggestion-item"
+          data-tag="${escapeHtml(tag.name)}"
+        >${escapeHtml(tag.name)}（${tag.count}）</button>
+      `).join("");
+
+      container.classList.remove("hidden");
+    }
+
+    function showEditTagSuggestions() {
+      editTagSuggestionsVisible = true;
+      if (hideEditTagSuggestionsTimer) {
+        clearTimeout(hideEditTagSuggestionsTimer);
+        hideEditTagSuggestionsTimer = null;
+      }
+      renderEditTagSuggestions();
+    }
+
+    function hideEditTagSuggestions() {
+      editTagSuggestionsVisible = false;
+      const container = $("editTagSuggestions");
+      if (!container) return;
+      container.classList.add("hidden");
+    }
+
+    function scheduleHideEditTagSuggestions() {
+      hideEditTagSuggestionsTimer = setTimeout(() => {
+        hideEditTagSuggestions();
+      }, 120);
+    }
+
+    function insertTagToEditInput(tagName) {
+      const existingTags = parseTags(editingTags);
+      if (existingTags.includes(tagName)) {
+        const input = $("editTagsInput");
+        if (input) input.focus();
+        return;
+      }
+
+      const nextTags = [...existingTags, tagName];
+      editingTags = nextTags.join("，");
+      render();
+
+      requestAnimationFrame(() => {
+        const input = $("editTagsInput");
+        if (input) input.focus();
+        showEditTagSuggestions();
+      });
+    }
+
+    function updateClearSearchButton() {
+      const btn = $("clearSearchBtn");
+      const input = $("searchInput");
+      if (!btn || !input) return;
+
+      btn.classList.toggle("hidden", !input.value);
+    }
+
     window.updateEditingText = value => {
       editingText = value;
       adjustEditTextareaHeight();
@@ -671,7 +812,13 @@
 
     window.updateEditingTags = value => {
       editingTags = value;
+      if (editTagSuggestionsVisible) {
+        renderEditTagSuggestions();
+      }
     };
+
+    window.showEditTagSuggestions = showEditTagSuggestions;
+    window.scheduleHideEditTagSuggestions = scheduleHideEditTagSuggestions;
 
     window.toggleExpand = id => {
       if (expandedIds.has(id)) {
@@ -740,6 +887,8 @@
           items = normalizeItems(data);
           expandedIds = new Set();
           resetEditState();
+          hideTagSuggestions();
+          updateClearSearchButton();
           save();
           alert("匯入成功");
         } catch {
@@ -760,26 +909,42 @@
 
     $("addBtn").addEventListener("click", addItem);
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
+
     $("searchInput").addEventListener("input", e => {
       keyword = e.target.value;
       render();
+      updateClearSearchButton();
     });
+
+    $("clearSearchBtn").addEventListener("click", () => {
+      $("searchInput").value = "";
+      keyword = "";
+      render();
+      updateClearSearchButton();
+      $("searchInput").focus();
+    });
+
     $("filterTag").addEventListener("change", e => {
       selectedTag = e.target.value;
       render();
     });
+
     $("filterPinned").addEventListener("change", e => {
       pinnedOnly = e.target.value;
       render();
     });
+
     $("toggleUtilityBtn").addEventListener("click", () => {
       utilityExpanded = !utilityExpanded;
       updateUtilityToggle();
     });
+
     $("exportBtn").addEventListener("click", exportJSON);
+
     $("importFile").addEventListener("change", e => {
       if (e.target.files[0]) importJSON(e.target.files[0]);
     });
+
     $("clearAllBtn").addEventListener("click", clearAll);
 
     $("inputTags").addEventListener("focus", () => {
@@ -807,8 +972,30 @@
       insertTagToInput(tagName);
     });
 
+    document.addEventListener("mousedown", e => {
+      const editSuggestions = $("editTagSuggestions");
+      const editInput = $("editTagsInput");
+
+      if (!editSuggestions || !editInput) return;
+
+      const clickedSuggestion = e.target.closest(".tag-suggestion-item");
+      const insideEditSuggestions = editSuggestions.contains(e.target);
+      const insideEditInput = editInput.contains(e.target);
+
+      if (insideEditSuggestions && clickedSuggestion) {
+        e.preventDefault();
+        const tagName = clickedSuggestion.dataset.tag;
+        if (tagName) insertTagToEditInput(tagName);
+        return;
+      }
+
+      if (!insideEditSuggestions && !insideEditInput) {
+        hideEditTagSuggestions();
+      }
+    });
+
     updateUtilityToggle();
+    updateClearSearchButton();
     save();
   </script>
-</body>
 </html>
