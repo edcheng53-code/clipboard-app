@@ -84,11 +84,20 @@
       overflow: hidden;
     }
     .text-toggle {
-      margin-top: 8px;
+      margin-top: 6px;
+      text-align: right;
     }
     .text-toggle button {
-      padding: 8px 12px;
-      font-size: 13px;
+      padding: 0;
+      font-size: 12px;
+      background: transparent;
+      color: #8a94a6;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    .text-toggle button:hover {
+      color: #6b7280;
     }
     .tag {
       display: inline-block;
@@ -333,8 +342,8 @@
           ${
             showToggle
               ? `<div class="text-toggle">
-                  <button class="secondary" onclick="toggleExpand('${item.id}')">
-                    ${isExpanded ? "收起來" : "詳細內容"}
+                  <button onclick="toggleExpand('${item.id}')">
+                    ${isExpanded ? "收起來 ▴" : "詳細內容 ▾"}
                   </button>
                 </div>`
               : ""
