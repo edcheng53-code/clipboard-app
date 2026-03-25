@@ -164,6 +164,45 @@
     .card-edit-actions {
       margin-top: 10px;
     }
+
+    .tag-input-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 140px;
+    }
+    .tag-suggestions {
+      margin-top: 8px;
+      border: 1px solid #d0d0d7;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .tag-suggestions.hidden {
+      display: none;
+    }
+    .tag-suggestion-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      margin: 0;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: #4b5563;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .tag-suggestion-item:hover {
+      background: #f3f4f6;
+    }
+    .tag-suggestion-empty {
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #9ca3af;
+    }
   </style>
 </head>
 <body>
@@ -173,7 +212,10 @@
     <div class="panel">
       <textarea id="inputText" placeholder="請貼上或輸入文字…"></textarea>
       <div class="row">
-        <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
+        <div class="tag-input-wrap">
+          <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
+          <div id="tagSuggestions" class="tag-suggestions hidden"></div>
+        </div>
         <button id="addBtn">新增</button>
         <button id="pasteBtn" class="secondary">貼上剪貼簿</button>
       </div>
@@ -287,6 +329,8 @@
     let editingTags = "";
     let expandedIds = new Set();
     let utilityExpanded = false;
+    let tagSuggestionsVisible = false;
+    let hideTagSuggestionsTimer = null;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -438,6 +482,10 @@
 
     function render() {
       refreshTagOptions();
+      if (tagSuggestionsVisible) {
+        renderTagSuggestions();
+      }
+
       const data = filteredItems();
       $("infoBar").textContent = `目前共有 ${items.length} 筆資料，顯示 ${data.length} 筆`;
 
@@ -484,6 +532,7 @@
 
       $("inputText").value = "";
       $("inputTags").value = "";
+      hideTagSuggestions();
       save();
     }
 
@@ -555,6 +604,60 @@
 
       actions.classList.toggle("hidden", !utilityExpanded);
       button.textContent = utilityExpanded ? "收起來 ▴" : "更多操作 ▾";
+    }
+
+    function renderTagSuggestions() {
+      const container = $("tagSuggestions");
+      if (!container) return;
+
+      const tags = getTags();
+      if (!tags.length) {
+        container.innerHTML = `<div class="tag-suggestion-empty">目前還沒有可選標籤</div>`;
+        container.classList.remove("hidden");
+        return;
+      }
+
+      container.innerHTML = tags.map(tag => `
+        <button
+          type="button"
+          class="tag-suggestion-item"
+          data-tag="${escapeHtml(tag.name)}"
+        >${escapeHtml(tag.name)}（${tag.count}）</button>
+      `).join("");
+
+      container.classList.remove("hidden");
+    }
+
+    function showTagSuggestions() {
+      tagSuggestionsVisible = true;
+      if (hideTagSuggestionsTimer) {
+        clearTimeout(hideTagSuggestionsTimer);
+        hideTagSuggestionsTimer = null;
+      }
+      renderTagSuggestions();
+    }
+
+    function hideTagSuggestions() {
+      tagSuggestionsVisible = false;
+      const container = $("tagSuggestions");
+      if (!container) return;
+      container.classList.add("hidden");
+    }
+
+    function insertTagToInput(tagName) {
+      const input = $("inputTags");
+      if (!input) return;
+
+      const existingTags = parseTags(input.value);
+      if (existingTags.includes(tagName)) {
+        input.focus();
+        return;
+      }
+
+      const nextTags = [...existingTags, tagName];
+      input.value = nextTags.join("，");
+      input.focus();
+      showTagSuggestions();
     }
 
     window.updateEditingText = value => {
@@ -674,6 +777,31 @@
       if (e.target.files[0]) importJSON(e.target.files[0]);
     });
     $("clearAllBtn").addEventListener("click", clearAll);
+
+    $("inputTags").addEventListener("focus", () => {
+      showTagSuggestions();
+    });
+
+    $("inputTags").addEventListener("input", () => {
+      if (tagSuggestionsVisible) {
+        renderTagSuggestions();
+      }
+    });
+
+    $("inputTags").addEventListener("blur", () => {
+      hideTagSuggestionsTimer = setTimeout(() => {
+        hideTagSuggestions();
+      }, 120);
+    });
+
+    $("tagSuggestions").addEventListener("mousedown", e => {
+      const button = e.target.closest(".tag-suggestion-item");
+      if (!button) return;
+      e.preventDefault();
+      const tagName = button.dataset.tag;
+      if (!tagName) return;
+      insertTagToInput(tagName);
+    });
 
     updateUtilityToggle();
     save();
