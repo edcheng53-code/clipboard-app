@@ -118,6 +118,7 @@
     }
     .card-edit-text {
       min-height: 160px;
+      overflow-y: auto;
     }
     .card-edit-tags {
       margin-top: 10px;
@@ -404,6 +405,10 @@
         }
         return renderViewCard(item);
       }).join("");
+
+      if (editingId) {
+        requestAnimationFrame(adjustEditTextareaHeight);
+      }
     }
 
     function getNextOrder() {
@@ -443,11 +448,24 @@
       }
     }
 
+    function adjustEditTextareaHeight() {
+      const textarea = document.querySelector(".card-edit-text");
+      if (!textarea) return;
+
+      const computed = window.getComputedStyle(textarea);
+      const lineHeight = parseFloat(computed.lineHeight) || 26;
+      const lines = textarea.value.split(/\r?\n/).length;
+      const targetLines = Math.min(Math.max(lines, 6), 15);
+
+      textarea.style.height = `${targetLines * lineHeight}px`;
+    }
+
     function startEdit(item) {
       editingId = item.id;
       editingText = item.text;
       editingTags = (item.tags || []).join(", ");
       render();
+      requestAnimationFrame(adjustEditTextareaHeight);
     }
 
     function resetEditState() {
@@ -485,6 +503,7 @@
 
     window.updateEditingText = value => {
       editingText = value;
+      adjustEditTextareaHeight();
     };
 
     window.updateEditingTags = value => {
