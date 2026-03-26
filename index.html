@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>剪貼簿 v2</title>
+  <title>剪貼簿 v3</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -106,6 +106,12 @@
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 5;
       overflow: hidden;
+    }
+
+    .highlight {
+      background: #fff3a3;
+      border-radius: 4px;
+      padding: 0 1px;
     }
 
     .text-toggle {
@@ -293,6 +299,7 @@
       font-size: 13px;
       color: #6b7280;
       margin-bottom: 14px;
+      line-height: 1.5;
     }
 
     .sort-list {
@@ -390,7 +397,7 @@
 </head>
 <body>
   <div class="app">
-    <h1>剪貼簿 v2</h1>
+    <h1>剪貼簿 v3</h1>
 
     <div id="homeView">
       <div class="panel">
@@ -573,8 +580,36 @@
         .replace(/'/g,"&#039;");
     }
 
+    function escapeRegExp(text) {
+      return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function highlightText(text, searchWord) {
+      const source = String(text ?? "");
+      const q = String(searchWord ?? "").trim();
+      if (!q) return escapeHtml(source);
+
+      const pattern = new RegExp(`(${escapeRegExp(q)})`, "gi");
+      const parts = source.split(pattern);
+
+      return parts.map(part => {
+        if (!part) return "";
+        if (part.toLowerCase() === q.toLowerCase()) {
+          return `<span class="highlight">${escapeHtml(part)}</span>`;
+        }
+        return escapeHtml(part);
+      }).join("");
+    }
+
     function formatDate(ts) {
       return new Date(ts).toLocaleString("zh-TW");
+    }
+
+    function formatExportDate(date = new Date()) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
     }
 
     function getTags() {
@@ -646,7 +681,7 @@
 
     function renderTags(tags) {
       if (!tags || !tags.length) return "";
-      return tags.map(tag => `<div class="tag">${escapeHtml(tag)}</div>`).join("");
+      return tags.map(tag => `<div class="tag">${highlightText(tag, keyword)}</div>`).join("");
     }
 
     function shouldShowToggle(text) {
@@ -670,7 +705,7 @@
 
       return `
         <div class="card ${item.pinned ? "pinned" : ""}">
-          <div class="text ${showToggle && !isExpanded ? "collapsed" : ""}">${escapeHtml(item.text)}</div>
+          <div class="text ${showToggle && !isExpanded ? "collapsed" : ""}">${highlightText(item.text, keyword)}</div>
           ${
             showToggle
               ? `<div class="text-toggle">
@@ -1302,7 +1337,7 @@
       const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "剪貼簿資料.json";
+      a.download = `剪貼簿資料_${formatExportDate()}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
     }
