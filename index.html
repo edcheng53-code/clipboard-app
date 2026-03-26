@@ -316,7 +316,15 @@
       border: 1px solid #e5e7eb;
       border-radius: 14px;
       padding: 10px 12px;
-      transition: background .15s ease, border-color .15s ease;
+      transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease, opacity .15s ease;
+    }
+
+    .sort-item.dragging {
+      border-color: #94a3b8;
+      box-shadow: 0 12px 28px rgba(0,0,0,.14);
+      background: #ffffff;
+      transform: scale(1.01);
+      opacity: 0.92;
     }
 
     .sort-item.drag-over {
@@ -338,21 +346,28 @@
       overflow: hidden;
     }
 
-    .sort-handle {
+    .sort-handle-wrap {
       flex-shrink: 0;
-      width: 32px;
+      width: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #9ca3af;
-      font-size: 20px;
-      user-select: none;
       cursor: grab;
-      border-radius: 10px;
+      border-radius: 12px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
     }
 
-    .sort-handle:active {
+    .sort-handle-wrap:active {
       cursor: grabbing;
+    }
+
+    .sort-handle {
+      color: #9ca3af;
+      font-size: 18px;
+      line-height: 1;
+      pointer-events: none;
     }
 
     .sort-empty,
@@ -562,6 +577,7 @@
     let hideEditTagSuggestionsTimer = null;
 
     let dragSourceId = null;
+    let dragOverTargetId = null;
 
     let bulkEditSelectedTag = "";
     let bulkEditNewName = "";
@@ -773,16 +789,18 @@
       }
 
       container.innerHTML = data.map(item => `
-        <div class="sort-item" data-id="${item.id}" ondragover="handleSortDragOver(event)" ondrop="handleSortDrop(event)" ondragleave="handleSortDragLeave(event)">
+        <div class="sort-item ${item.id === dragSourceId ? "dragging" : ""} ${item.id === dragOverTargetId ? "drag-over" : ""}" data-id="${item.id}" ondragover="handleSortDragOver(event)" ondrop="handleSortDrop(event)" ondragleave="handleSortDragLeave(event)">
           <div class="sort-preview">${escapeHtml(getSortPreviewText(item.text))}</div>
           <div
-            class="sort-handle"
+            class="sort-handle-wrap"
             draggable="true"
             data-id="${item.id}"
             ondragstart="handleSortDragStart(event)"
             ondragend="handleSortDragEnd(event)"
             title="拖拉排序"
-          >⋮⋮</div>
+          >
+            <div class="sort-handle">⋮⋮</div>
+          </div>
         </div>
       `).join("");
     }
@@ -1000,6 +1018,8 @@
 
     function finishSortMode() {
       currentView = "home";
+      dragSourceId = null;
+      dragOverTargetId = null;
       render();
     }
 
@@ -1206,67 +1226,71 @@
       }));
     }
 
+    function moveItemInDisplayedOrder(sourceId, targetId, insertAfter) {
+      const orderedIds = getHomeOrderedItems().map(item => item.id);
+      const fromIndex = orderedIds.indexOf(sourceId);
+      const targetIndex = orderedIds.indexOf(targetId);
+
+      if (fromIndex < 0 || targetIndex < 0) return;
+
+      orderedIds.splice(fromIndex, 1);
+      const adjustedTargetIndex = orderedIds.indexOf(targetId);
+      const insertIndex = insertAfter ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+      orderedIds.splice(insertIndex, 0, sourceId);
+
+      applyDisplayOrder(orderedIds);
+    }
+
     window.handleSortDragStart = event => {
-      const sourceId = event.target.dataset.id;
+      const sourceId = event.currentTarget.dataset.id;
       if (!sourceId) return;
+
       dragSourceId = sourceId;
+      dragOverTargetId = null;
+
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", sourceId);
+
+      const draggedItem = event.currentTarget.closest(".sort-item");
+      if (draggedItem) {
+        draggedItem.classList.add("dragging");
+      }
     };
 
     window.handleSortDragOver = event => {
       event.preventDefault();
-      const item = event.currentTarget;
-      if (!item) return;
-      item.classList.add("drag-over");
+
+      const targetItem = event.currentTarget;
+      const targetId = targetItem?.dataset.id;
+      if (!targetId || !dragSourceId || targetId === dragSourceId) return;
+
+      const rect = targetItem.getBoundingClientRect();
+      const insertAfter = event.clientY > rect.top + rect.height / 2;
+
+      dragOverTargetId = targetId;
+      moveItemInDisplayedOrder(dragSourceId, targetId, insertAfter);
+      render();
+      currentView = "sort";
     };
 
     window.handleSortDragLeave = event => {
-      const item = event.currentTarget;
-      if (!item) return;
-      item.classList.remove("drag-over");
+      const targetItem = event.currentTarget;
+      if (!targetItem) return;
+      targetItem.classList.remove("drag-over");
     };
 
     window.handleSortDrop = event => {
       event.preventDefault();
-      const targetItem = event.currentTarget;
-      if (!targetItem || !dragSourceId) return;
-
-      const targetId = targetItem.dataset.id;
-      if (!targetId || targetId === dragSourceId) {
-        targetItem.classList.remove("drag-over");
-        return;
-      }
-
-      const orderedIds = getHomeOrderedItems().map(item => item.id);
-      const fromIndex = orderedIds.indexOf(dragSourceId);
-      const targetIndex = orderedIds.indexOf(targetId);
-
-      if (fromIndex < 0 || targetIndex < 0) {
-        targetItem.classList.remove("drag-over");
-        return;
-      }
-
-      orderedIds.splice(fromIndex, 1);
-
-      const rect = targetItem.getBoundingClientRect();
-      const insertAfter = event.clientY > rect.top + rect.height / 2;
-      const adjustedTargetIndex = orderedIds.indexOf(targetId);
-      const insertIndex = insertAfter ? adjustedTargetIndex + 1 : adjustedTargetIndex;
-
-      orderedIds.splice(insertIndex, 0, dragSourceId);
-
-      applyDisplayOrder(orderedIds);
-      targetItem.classList.remove("drag-over");
+      dragOverTargetId = null;
       save();
       currentView = "sort";
     };
 
     window.handleSortDragEnd = () => {
       dragSourceId = null;
-      document.querySelectorAll(".sort-item.drag-over").forEach(item => {
-        item.classList.remove("drag-over");
-      });
+      dragOverTargetId = null;
+      render();
+      currentView = "sort";
     };
 
     window.updateEditingText = value => {
@@ -1459,6 +1483,26 @@
       if (!insideEditSuggestions && !insideEditInput) {
         hideEditTagSuggestions();
       }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        setTimeout(() => {
+          $("filterTag")?.blur();
+        }, 50);
+      }
+    });
+
+    window.addEventListener("pageshow", () => {
+      setTimeout(() => {
+        $("filterTag")?.blur();
+      }, 50);
+    });
+
+    window.addEventListener("focus", () => {
+      setTimeout(() => {
+        $("filterTag")?.blur();
+      }, 50);
     });
 
     render();
