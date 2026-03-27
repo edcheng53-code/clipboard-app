@@ -582,8 +582,8 @@
     let bulkEditSelectedTag = "";
     let bulkEditNewName = "";
 
-    const INPUT_TEXT_BASE_HEIGHT = 96;
-    const INPUT_TEXT_MAX_HEIGHT = INPUT_TEXT_BASE_HEIGHT * 2;
+    let inputTextBaseHeight = 96;
+    let inputTextMaxHeight = inputTextBaseHeight * 2;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -959,13 +959,31 @@
       const textarea = $("inputText");
       if (!textarea) return;
 
-      textarea.style.height = `${INPUT_TEXT_BASE_HEIGHT}px`;
+      textarea.style.height = `${inputTextBaseHeight}px`;
       const nextHeight = Math.min(
-        Math.max(textarea.scrollHeight, INPUT_TEXT_BASE_HEIGHT),
-        INPUT_TEXT_MAX_HEIGHT
+        Math.max(textarea.scrollHeight, inputTextBaseHeight),
+        inputTextMaxHeight
       );
       textarea.style.height = `${nextHeight}px`;
-      textarea.style.overflowY = nextHeight >= INPUT_TEXT_MAX_HEIGHT ? "auto" : "hidden";
+      textarea.style.overflowY = nextHeight >= inputTextMaxHeight ? "auto" : "hidden";
+    }
+
+    function initInputTextareaAutoHeight() {
+      const textarea = $("inputText");
+      if (!textarea) return;
+
+      const computed = window.getComputedStyle(textarea);
+      const parsedMinHeight = parseFloat(computed.minHeight);
+      const parsedHeight = parseFloat(computed.height);
+      const baseline = Number.isFinite(parsedMinHeight) && parsedMinHeight > 0
+        ? parsedMinHeight
+        : Number.isFinite(parsedHeight) && parsedHeight > 0
+          ? parsedHeight
+          : 96;
+
+      inputTextBaseHeight = baseline;
+      inputTextMaxHeight = baseline * 2;
+      adjustInputTextareaHeight();
     }
 
     function adjustEditTextareaHeight() {
@@ -1416,6 +1434,9 @@
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
 
     $("inputText").addEventListener("input", adjustInputTextareaHeight);
+    $("inputText").addEventListener("paste", () => {
+      requestAnimationFrame(adjustInputTextareaHeight);
+    });
 
     $("searchInput").addEventListener("input", e => {
       keyword = e.target.value;
@@ -1525,8 +1546,8 @@
       }, 50);
     });
 
+    initInputTextareaAutoHeight();
     render();
-    adjustInputTextareaHeight();
   </script>
 </body>
 </html>
