@@ -48,7 +48,7 @@
 
     textarea {
       min-height: 96px;
-      resize: vertical;
+      resize: none;
     }
 
     .row {
@@ -582,6 +582,9 @@
     let bulkEditSelectedTag = "";
     let bulkEditNewName = "";
 
+    const INPUT_TEXT_BASE_HEIGHT = 96;
+    const INPUT_TEXT_MAX_HEIGHT = INPUT_TEXT_BASE_HEIGHT * 2;
+
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
       render();
@@ -938,6 +941,7 @@
 
       $("inputText").value = "";
       $("inputTags").value = "";
+      adjustInputTextareaHeight();
       hideTagSuggestions();
       save();
     }
@@ -945,9 +949,26 @@
     async function pasteFromClipboard() {
       try {
         $("inputText").value = await navigator.clipboard.readText();
+        adjustInputTextareaHeight();
+        requestAnimationFrame(adjustInputTextareaHeight);
       } catch {
         alert("無法直接讀取剪貼簿，可能是權限限制。");
       }
+    }
+
+    function adjustInputTextareaHeight() {
+      const textarea = $("inputText");
+      if (!textarea) return;
+
+      textarea.style.height = "auto";
+      const measuredHeight = textarea.scrollHeight;
+      const nextHeight = Math.min(
+        Math.max(measuredHeight, INPUT_TEXT_BASE_HEIGHT),
+        INPUT_TEXT_MAX_HEIGHT
+      );
+
+      textarea.style.height = `${nextHeight}px`;
+      textarea.style.overflowY = measuredHeight > INPUT_TEXT_MAX_HEIGHT ? "auto" : "hidden";
     }
 
     function adjustEditTextareaHeight() {
@@ -1397,6 +1418,9 @@
     $("addBtn").addEventListener("click", addItem);
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
 
+    $("inputText").addEventListener("input", adjustInputTextareaHeight);
+    $("inputText").addEventListener("paste", () => requestAnimationFrame(adjustInputTextareaHeight));
+
     $("searchInput").addEventListener("input", e => {
       keyword = e.target.value;
       render();
@@ -1506,6 +1530,7 @@
     });
 
     render();
+    adjustInputTextareaHeight();
   </script>
 </body>
 </html>
