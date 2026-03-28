@@ -641,6 +641,10 @@
 
     let inputTextBaseHeight = 96;
     let inputTextMaxHeight = inputTextBaseHeight * 2;
+    let lastKnownClipboardText = null;
+    let lastInternalCopyText = "";
+    let clipboardCheckTimer = null;
+    let clipboardCheckInProgress = false;
 
     function save() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -1005,10 +1009,63 @@
 
     async function pasteFromClipboard() {
       try {
-        $("inputText").value = await navigator.clipboard.readText();
+        const clipboardText = await navigator.clipboard.readText();
+        $("inputText").value = clipboardText;
         adjustInputTextareaHeight();
+        lastKnownClipboardText = clipboardText;
       } catch {
         alert("無法直接讀取剪貼簿，可能是權限限制。");
+      }
+    }
+
+    async function checkExternalClipboardAndPrompt() {
+      if (clipboardCheckInProgress || document.hidden) return;
+      clipboardCheckInProgress = true;
+
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (!clipboardText) {
+          lastKnownClipboardText = clipboardText;
+          return;
+        }
+
+        if (clipboardText === lastKnownClipboardText) return;
+
+        if (clipboardText === lastInternalCopyText) {
+          lastKnownClipboardText = clipboardText;
+          return;
+        }
+
+        const shouldUseClipboard = confirm("偵測到外部 App 的新剪貼簿內容，是否要複製到輸入框？");
+        if (shouldUseClipboard) {
+          $("inputText").value = clipboardText;
+          adjustInputTextareaHeight();
+        }
+
+        lastKnownClipboardText = clipboardText;
+      } catch {
+        // 讀取失敗通常是權限限制，保持靜默避免干擾既有流程
+      } finally {
+        clipboardCheckInProgress = false;
+      }
+    }
+
+    function scheduleExternalClipboardCheck(delay = 220) {
+      if (clipboardCheckTimer) {
+        clearTimeout(clipboardCheckTimer);
+      }
+
+      clipboardCheckTimer = setTimeout(() => {
+        checkExternalClipboardAndPrompt();
+      }, delay);
+    }
+
+    async function primeClipboardSnapshot() {
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        lastKnownClipboardText = clipboardText;
+      } catch {
+        // 初次載入若無權限就略過
       }
     }
 
@@ -1416,6 +1473,8 @@
 
       try {
         await navigator.clipboard.writeText(item.text);
+        lastInternalCopyText = item.text;
+        lastKnownClipboardText = item.text;
         showCopyToast("已複製");
       } catch {
         showCopyToast("複製失敗");
@@ -1588,6 +1647,7 @@
         setTimeout(() => {
           $("filterTag")?.blur();
         }, 50);
+        scheduleExternalClipboardCheck();
       }
     });
 
@@ -1595,16 +1655,19 @@
       setTimeout(() => {
         $("filterTag")?.blur();
       }, 50);
+      scheduleExternalClipboardCheck();
     });
 
     window.addEventListener("focus", () => {
       setTimeout(() => {
         $("filterTag")?.blur();
       }, 50);
+      scheduleExternalClipboardCheck();
     });
 
     initInputTextareaAutoHeight();
     render();
+    primeClipboardSnapshot();
   </script>
 </body>
 </html>
