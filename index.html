@@ -408,6 +408,34 @@
       flex: 1;
       min-width: 140px;
     }
+
+    .copy-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      min-width: 220px;
+      max-width: calc(100vw - 48px);
+      padding: 24px 32px;
+      border-radius: 18px;
+      background: rgba(17, 24, 39, 0.9);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 4000;
+      box-shadow: 0 18px 38px rgba(0,0,0,.28);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+
+    .copy-toast.show {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -490,10 +518,36 @@
     </div>
   </div>
 
+  <div id="copyToast" class="copy-toast hidden" role="status" aria-live="polite"></div>
+
   <script>
     const STORAGE_KEY = "clipboard_items_v2";
     const UNTAGGED_VALUE = "__untagged__";
     const $ = id => document.getElementById(id);
+    let copyToastTimer = null;
+
+    function showCopyToast(message) {
+      const toast = $("copyToast");
+      if (!toast) return;
+
+      toast.textContent = message;
+      toast.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        toast.classList.add("show");
+      });
+
+      if (copyToastTimer) {
+        clearTimeout(copyToastTimer);
+      }
+
+      copyToastTimer = window.setTimeout(() => {
+        toast.classList.remove("show");
+        window.setTimeout(() => {
+          toast.classList.add("hidden");
+        }, 200);
+        copyToastTimer = null;
+      }, 3000);
+    }
 
     function normalizeTags(tags) {
       if (!Array.isArray(tags)) return [];
@@ -1359,9 +1413,9 @@
 
       try {
         await navigator.clipboard.writeText(item.text);
-        alert("已複製");
+        showCopyToast("已複製");
       } catch {
-        alert("複製失敗");
+        showCopyToast("複製失敗");
       }
     };
 
