@@ -439,6 +439,47 @@
     .copy-toast.show {
       opacity: 1;
     }
+
+    .clipboard-prompt-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 3500;
+    }
+
+    .clipboard-prompt {
+      width: min(420px, 100%);
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 14px 34px rgba(17, 24, 39, 0.2);
+    }
+
+    .clipboard-prompt-title {
+      margin: 0 0 8px;
+      font-size: 20px;
+      color: #111827;
+    }
+
+    .clipboard-prompt-text {
+      margin: 0;
+      color: #4b5563;
+      line-height: 1.6;
+    }
+
+    .clipboard-prompt-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .clipboard-prompt-actions button {
+      flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -522,12 +563,23 @@
   </div>
 
   <div id="copyToast" class="copy-toast hidden" role="status" aria-live="polite"></div>
+  <div id="clipboardPromptBackdrop" class="clipboard-prompt-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="clipboardPromptTitle">
+    <div class="clipboard-prompt">
+      <h2 id="clipboardPromptTitle" class="clipboard-prompt-title">偵測到外部剪貼簿</h2>
+      <p class="clipboard-prompt-text">要不要複製剛剛那一段文字到輸入框？</p>
+      <div class="clipboard-prompt-actions">
+        <button id="clipboardPromptAcceptBtn">複製</button>
+        <button id="clipboardPromptDeclineBtn" class="secondary">不要</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const STORAGE_KEY = "clipboard_items_v2";
     const UNTAGGED_VALUE = "__untagged__";
     const $ = id => document.getElementById(id);
     let copyToastTimer = null;
+    let externalClipboardPromptResolver = null;
 
     function showCopyToast(message) {
       const toast = $("copyToast");
@@ -1036,7 +1088,7 @@
           return;
         }
 
-        const shouldUseClipboard = confirm("偵測到外部 App 的新剪貼簿內容，是否要複製到輸入框？");
+        const shouldUseClipboard = await promptExternalClipboardImport();
         if (shouldUseClipboard) {
           $("inputText").value = clipboardText;
           adjustInputTextareaHeight();
@@ -1048,6 +1100,25 @@
       } finally {
         clipboardCheckInProgress = false;
       }
+    }
+
+    function resolveExternalClipboardPrompt(value) {
+      if (!externalClipboardPromptResolver) return;
+      const resolver = externalClipboardPromptResolver;
+      externalClipboardPromptResolver = null;
+      $("clipboardPromptBackdrop")?.classList.add("hidden");
+      resolver(value);
+    }
+
+    function promptExternalClipboardImport() {
+      if (externalClipboardPromptResolver) {
+        resolveExternalClipboardPrompt(false);
+      }
+
+      return new Promise(resolve => {
+        externalClipboardPromptResolver = resolve;
+        $("clipboardPromptBackdrop")?.classList.remove("hidden");
+      });
     }
 
     function scheduleExternalClipboardCheck(delay = 220) {
@@ -1548,6 +1619,12 @@
 
     $("addBtn").addEventListener("click", addItem);
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
+    $("clipboardPromptAcceptBtn").addEventListener("click", () => {
+      resolveExternalClipboardPrompt(true);
+    });
+    $("clipboardPromptDeclineBtn").addEventListener("click", () => {
+      resolveExternalClipboardPrompt(false);
+    });
 
     $("inputText").addEventListener("input", adjustInputTextareaHeight);
     $("inputText").addEventListener("paste", () => {
