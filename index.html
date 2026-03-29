@@ -445,7 +445,7 @@
       -webkit-backdrop-filter: blur(8px) saturate(120%);
       pointer-events: none;
       opacity: 0;
-      transition: opacity .24s ease;
+      transition: opacity 1s ease;
     }
 
     .copy-toast.show {
@@ -542,7 +542,8 @@
     const STORAGE_KEY = "clipboard_items_v2";
     const UNTAGGED_VALUE = "__untagged__";
     const $ = id => document.getElementById(id);
-    let copyToastTimer = null;
+    let copyToastFadeTimer = null;
+    let copyToastHideTimer = null;
 
     function showCopyToast(message) {
       const toast = $("copyToast");
@@ -554,17 +555,23 @@
         toast.classList.add("show");
       });
 
-      if (copyToastTimer) {
-        clearTimeout(copyToastTimer);
+      if (copyToastFadeTimer) {
+        clearTimeout(copyToastFadeTimer);
       }
 
-      copyToastTimer = window.setTimeout(() => {
+      if (copyToastHideTimer) {
+        clearTimeout(copyToastHideTimer);
+      }
+
+      copyToastFadeTimer = window.setTimeout(() => {
         toast.classList.remove("show");
-        window.setTimeout(() => {
-          toast.classList.add("hidden");
-        }, 200);
-        copyToastTimer = null;
-      }, 3000);
+        copyToastFadeTimer = null;
+      }, 1000);
+
+      copyToastHideTimer = window.setTimeout(() => {
+        toast.classList.add("hidden");
+        copyToastHideTimer = null;
+      }, 2000);
     }
 
     function normalizeTags(tags) {
