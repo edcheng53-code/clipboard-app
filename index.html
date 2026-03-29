@@ -174,6 +174,24 @@
       margin-top: 8px;
     }
 
+    .tag-button {
+      border: none;
+      box-shadow: none;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      line-height: inherit;
+    }
+
+    .tag-button:hover {
+      background: #e8edff;
+    }
+
+    .tag-button.active {
+      background: #dfe6fb;
+      color: #374151;
+    }
+
     .pinned {
       border: 2px solid #f59e0b;
     }
@@ -779,7 +797,23 @@
 
     function renderTags(tags) {
       if (!tags || !tags.length) return "";
-      return tags.map(tag => `<div class="tag">${highlightText(tag, keyword)}</div>`).join("");
+      return tags
+        .map(tag => `
+          <button
+            type="button"
+            class="tag tag-button ${selectedTag === tag ? "active" : ""}"
+            onclick="filterByTag('${encodeURIComponent(tag)}')"
+          >
+            ${highlightText(tag, keyword)}
+          </button>
+        `)
+        .join("");
+    }
+
+    function filterByTag(encodedTag) {
+      selectedTag = decodeURIComponent(encodedTag);
+      $("filterTag").value = selectedTag;
+      render();
     }
 
     function shouldShowToggle(text) {
