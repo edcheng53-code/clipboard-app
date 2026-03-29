@@ -253,12 +253,22 @@
       min-width: 140px;
     }
 
+    .input-text-wrap {
+      position: relative;
+    }
+
+    .input-text-wrap textarea {
+      width: 100%;
+      padding-right: 42px;
+    }
+
     .search-input-wrap input {
       width: 100%;
       padding-right: 42px;
     }
 
-    .clear-search-btn {
+    .clear-search-btn,
+    .clear-input-btn {
       position: absolute;
       top: 50%;
       right: 10px;
@@ -276,7 +286,8 @@
       box-shadow: none;
     }
 
-    .clear-search-btn:hover {
+    .clear-search-btn:hover,
+    .clear-input-btn:hover {
       color: #6b7280;
       background: #f3f4f6;
     }
@@ -447,7 +458,10 @@
 
     <div id="homeView">
       <div class="panel">
-        <textarea id="inputText" placeholder="請貼上或輸入文字…"></textarea>
+        <div class="input-text-wrap">
+          <textarea id="inputText" placeholder="請貼上或輸入文字…"></textarea>
+          <button id="clearInputBtn" type="button" class="clear-input-btn hidden" aria-label="清空輸入">×</button>
+        </div>
         <div class="row">
           <div class="tag-input-wrap">
             <input id="inputTags" placeholder="分類標籤，多個標籤可用逗號、頓號或分號分隔，例如：工作，筆記、常用" />
@@ -961,6 +975,7 @@
       updateViewVisibility();
       refreshTagOptions();
       updateClearSearchButton();
+      updateClearInputButton();
       updateUtilityToggle();
 
       if (tagSuggestionsVisible) {
@@ -1309,6 +1324,14 @@
       btn.classList.toggle("hidden", !input.value);
     }
 
+    function updateClearInputButton() {
+      const btn = $("clearInputBtn");
+      const input = $("inputText");
+      if (!btn || !input) return;
+
+      btn.classList.toggle("hidden", !input.value);
+    }
+
     function applyDisplayOrder(displayIds) {
       const base = displayIds.length;
       const orderMap = new Map(displayIds.map((id, index) => [id, base - index]));
@@ -1491,8 +1514,19 @@
     $("pasteBtn").addEventListener("click", pasteFromClipboard);
 
     $("inputText").addEventListener("input", adjustInputTextareaHeight);
+    $("inputText").addEventListener("input", updateClearInputButton);
     $("inputText").addEventListener("paste", () => {
-      requestAnimationFrame(adjustInputTextareaHeight);
+      requestAnimationFrame(() => {
+        adjustInputTextareaHeight();
+        updateClearInputButton();
+      });
+    });
+
+    $("clearInputBtn").addEventListener("click", () => {
+      $("inputText").value = "";
+      adjustInputTextareaHeight();
+      updateClearInputButton();
+      $("inputText").focus();
     });
 
     $("searchInput").addEventListener("input", e => {
