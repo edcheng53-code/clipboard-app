@@ -802,7 +802,7 @@
           <button
             type="button"
             class="tag tag-button ${selectedTag === tag ? "active" : ""}"
-            onclick="filterByTag('${encodeURIComponent(tag)}')"
+            data-encoded-tag="${escapeHtml(encodeURIComponent(tag))}"
           >
             ${highlightText(tag, keyword)}
           </button>
@@ -1592,6 +1592,14 @@
     $("filterPinned").addEventListener("change", e => {
       pinnedOnly = e.target.value;
       render();
+    });
+
+    $("list").addEventListener("click", e => {
+      const button = e.target.closest(".tag-button[data-encoded-tag]");
+      if (!button) return;
+      const encodedTag = button.dataset.encodedTag;
+      if (!encodedTag) return;
+      filterByTag(encodedTag);
     });
 
     $("toggleUtilityBtn").addEventListener("click", () => {
